@@ -8,6 +8,22 @@ import polarisStyles from "@shopify/polaris/build/esm/styles.css?url";
 
 import { authenticate } from "../shopify.server";
 
+declare global {
+  namespace JSX {
+    interface IntrinsicElements {
+      "s-app-nav": {
+        children?: any;
+        [key: string]: any;
+      };
+      "s-link": {
+        href?: string;
+        children?: any;
+        [key: string]: any;
+      };
+    }
+  }
+}
+
 export const links = () => [{ rel: "stylesheet", href: polarisStyles }];
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -28,7 +44,6 @@ export default function App() {
           <s-link href="/app/discounts">Discounts</s-link>
           <s-link href="/app/quote-requests">Quote Requests</s-link>
           <s-link href="/app/pricing">Pricing</s-link>
-          <s-link href="/app/additional">Additional page</s-link>
         </s-app-nav>
         <Outlet />
       </AppProvider>

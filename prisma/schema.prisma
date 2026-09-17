@@ -53,6 +53,7 @@ model QuoteRequest {
   email       String?
   notes       String?
   status      String   @default("new")
+  checkoutUrl String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

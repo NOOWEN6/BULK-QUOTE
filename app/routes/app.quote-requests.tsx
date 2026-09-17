@@ -5,6 +5,12 @@ import { requireActiveSubscription } from "../billing.server";
 import { planAtLeast, type PlanName } from "../billing-plans";
 import db from "../db.server";
 
+type ActionData = {
+  ok?: boolean;
+  error?: string;
+  checkoutUrl?: string;
+};
+
 // ---------- Loader ----------
 
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -31,7 +37,7 @@ export async function action({ request }: ActionFunctionArgs) {
   });
 
   if (!quoteRequest) {
-    return { error: "Quote request not found" };
+    return { error: "Quote request not found" } satisfies ActionData;
   }
 
   if (intent === "reject") {
@@ -39,7 +45,7 @@ export async function action({ request }: ActionFunctionArgs) {
       where: { id },
       data: { status: "rejected" },
     });
-    return { ok: true };
+    return { ok: true } satisfies ActionData;
   }
 
   if (intent === "approve") {
@@ -47,97 +53,108 @@ export async function action({ request }: ActionFunctionArgs) {
       where: { id },
       data: { status: "approved" },
     });
-    return { ok: true };
+    return { ok: true } satisfies ActionData;
   }
 
   if (intent === "convert") {
-    if (!planAtLeast(activePlan, "Growth")) {
-      return { error: "Converting to orders requires the Growth plan or higher." };
+    if (!activePlan || !planAtLeast(activePlan, "Growth")) {
+      return {
+        error: "Converting to orders requires the Growth plan or higher.",
+      } satisfies ActionData;
     }
 
     const discountRule = await db.discountRule.findFirst({
-  where: {
-    shop: session.shop,
-    minQty: { lte: quoteRequest.quantity },
-    OR: [{ maxQty: null }, { maxQty: { gte: quoteRequest.quantity } }],
-  },
-  orderBy: { minQty: "desc" },
-});
-    const variantGid = quoteRequest.variantId
-      ? quoteRequest.variantId.startsWith("gid://")
-        ? quoteRequest.variantId
-        : `gid://shopify/ProductVariant/${quoteRequest.variantId}`
-      : null;
+      where: {
+        shop: session.shop,
+        minQty: { lte: quoteRequest.quantity },
+        OR: [{ maxQty: null }, { maxQty: { gte: quoteRequest.quantity } }],
+      },
+      orderBy: { minQty: "desc" },
+    });
 
-    if (!variantGid) {
-      return { error: "This quote request has no variant on file — can't create an order line for it." };
+    if (!quoteRequest.variantId || !quoteRequest.productId) {
+      return {
+        error:
+          "This quote request has no product/variant on file — can't create a checkout link for it.",
+      } satisfies ActionData;
     }
 
-    const lineItem: Record<string, unknown> = {
-      variantId: variantGid,
-      quantity: quoteRequest.quantity,
-    };
+    const numericVariantId = quoteRequest.variantId.startsWith("gid://")
+      ? quoteRequest.variantId.split("/").pop()
+      : quoteRequest.variantId;
+
+    const productGid = quoteRequest.productId.startsWith("gid://")
+      ? quoteRequest.productId
+      : `gid://shopify/Product/${quoteRequest.productId}`;
+
+    let discountCode: string | null = null;
 
     if (discountRule) {
-      lineItem.appliedDiscount = {
-        title: `Wholesale discount (${discountRule.discountPct}%)`,
-        value: discountRule.discountPct,
-        valueType: "PERCENTAGE",
-      };
-    }
+      const code = `WHOLESALE-${quoteRequest.id.slice(-8).toUpperCase()}`;
 
-    const response = await admin.graphql(
-      `#graphql
-      mutation draftOrderCreate($input: DraftOrderInput!) {
-        draftOrderCreate(input: $input) {
-          draftOrder {
-            id
-            name
-            invoiceUrl
+      const discountResponse = await admin.graphql(
+        `#graphql
+        mutation discountCodeBasicCreate($basicCodeDiscount: DiscountCodeBasicInput!) {
+          discountCodeBasicCreate(basicCodeDiscount: $basicCodeDiscount) {
+            codeDiscountNode {
+              id
+            }
+            userErrors {
+              field
+              message
+            }
           }
-          userErrors {
-            field
-            message
-          }
-        }
-      }`,
-      {
-        variables: {
-          input: {
-            lineItems: [lineItem],
-            email: quoteRequest.email || undefined,
-            note: quoteRequest.notes
-              ? `Wholesale quote request — ${quoteRequest.companyName}\n${quoteRequest.notes}`
-              : `Wholesale quote request — ${quoteRequest.companyName}`,
+        }`,
+        {
+          variables: {
+            basicCodeDiscount: {
+              title: `Wholesale quote — ${quoteRequest.companyName}`,
+              code,
+              startsAt: new Date().toISOString(),
+              usageLimit: 1,
+              appliesOncePerCustomer: true,
+              customerSelection: { all: true },
+              customerGets: {
+                value: { percentage: Number(discountRule.discountPct) / 100 },
+                items: {
+                  products: {
+                    productsToAdd: [productGid],
+                  },
+                },
+              },
+            },
           },
         },
-      },
-    );
+      );
 
-    const result = await response.json();
-    const userErrors = result.data?.draftOrderCreate?.userErrors;
+      const discountResult = await discountResponse.json();
+      const discountErrors = discountResult.data?.discountCodeBasicCreate?.userErrors;
 
-    if (userErrors?.length) {
-      return { error: userErrors.map((e: { message: string }) => e.message).join(", ") };
+      if (discountErrors?.length) {
+        return {
+          error: discountErrors.map((e: { message: string }) => e.message).join(", "),
+        } satisfies ActionData;
+      }
+
+      discountCode = code;
     }
+
+    const checkoutUrl = discountCode
+      ? `https://${session.shop}/cart/${numericVariantId}:${quoteRequest.quantity}?discount=${discountCode}`
+      : `https://${session.shop}/cart/${numericVariantId}:${quoteRequest.quantity}`;
 
     await db.quoteRequest.update({
       where: { id },
-      data: { status: "converted" },
+      data: { status: "converted", checkoutUrl },
     });
 
-    return {
-      ok: true,
-      draftOrder: result.data?.draftOrderCreate?.draftOrder,
-    };
+    return { ok: true, checkoutUrl } satisfies ActionData;
   }
 
-  return { error: "Unknown action" };
+  return { error: "Unknown action" } satisfies ActionData;
 }
 
 // ---------- UI ----------
-
-type QuoteRequest = Awaited<ReturnType<typeof loader>>["quoteRequests"][number];
 
 function statusTone(status: string) {
   switch (status) {
@@ -150,7 +167,7 @@ function statusTone(status: string) {
     case "converted":
       return "success" as const;
     default:
-      return undefined;
+      return "neutral" as const;
   }
 }
 
@@ -158,14 +175,24 @@ function RowActions({
   request,
   activePlan,
 }: {
-  request: QuoteRequest;
+  request: { id: string; status: string; checkoutUrl: string | null };
   activePlan: PlanName | undefined;
 }) {
-  const fetcher = useFetcher<typeof action>();
+  const fetcher = useFetcher<ActionData>();
   const busy = fetcher.state !== "idle";
-  const canConvert = planAtLeast(activePlan, "Growth");
+  const canConvert = !!activePlan && planAtLeast(activePlan, "Growth");
 
-  if (request.status === "rejected" || request.status === "converted") {
+  if (request.status === "converted") {
+    return request.checkoutUrl ? (
+      <s-link href={request.checkoutUrl} target="_blank">
+        Open checkout link
+      </s-link>
+    ) : (
+      <s-text tone="neutral">—</s-text>
+    );
+  }
+
+  if (request.status === "rejected") {
     return <s-text tone="neutral">—</s-text>;
   }
 
@@ -199,12 +226,16 @@ function RowActions({
           fetcher.submit({ intent: "convert", id: request.id }, { method: "post" })
         }
       >
-        {canConvert ? "Convert to order" : "Convert (Growth+)"}
+        {canConvert ? "Get checkout link" : "Checkout link (Growth+)"}
       </s-button>
-      {fetcher.data?.error && <s-text tone="critical">{fetcher.data.error}</s-text>}
-      {fetcher.data?.draftOrder && (
-        <s-text tone="success">Draft order {fetcher.data.draftOrder.name} created</s-text>
-      )}
+      {fetcher.data?.error ? (
+        <s-text tone="critical">{fetcher.data.error}</s-text>
+      ) : null}
+      {fetcher.data?.checkoutUrl ? (
+        <s-link href={fetcher.data.checkoutUrl} target="_blank">
+          Open checkout link
+        </s-link>
+      ) : null}
     </s-stack>
   );
 }
@@ -214,7 +245,7 @@ export default function QuoteRequests() {
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
 
   const filtered = statusFilter
-    ? quoteRequests.filter((r) => r.status === statusFilter)
+    ? quoteRequests.filter((r: typeof quoteRequests[0]) => r.status === statusFilter)
     : quoteRequests;
 
   if (quoteRequests.length === 0) {
@@ -260,14 +291,16 @@ export default function QuoteRequests() {
             <s-table-header>Actions</s-table-header>
           </s-table-header-row>
           <s-table-body>
-            {filtered.map((request) => (
+            {filtered.map((request: typeof quoteRequests[0]) => (
               <s-table-row key={request.id}>
                 <s-table-cell>{request.companyName}</s-table-cell>
                 <s-table-cell>{request.email || "—"}</s-table-cell>
                 <s-table-cell>{request.productId}</s-table-cell>
                 <s-table-cell>{request.quantity}</s-table-cell>
                 <s-table-cell>{request.notes || "—"}</s-table-cell>
-                <s-table-cell>{new Date(request.createdAt).toLocaleDateString()}</s-table-cell>
+                <s-table-cell>
+                  {new Date(request.createdAt).toLocaleDateString()}
+                </s-table-cell>
                 <s-table-cell>
                   <s-badge tone={statusTone(request.status)}>{request.status}</s-badge>
                 </s-table-cell>
@@ -275,7 +308,7 @@ export default function QuoteRequests() {
                   <RowActions request={request} activePlan={activePlan} />
                 </s-table-cell>
               </s-table-row>
-            ))}
+               ))}
           </s-table-body>
         </s-table>
       </s-section>
