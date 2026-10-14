@@ -36,14 +36,18 @@ const PLAN_DETAILS: Record<PlanName, { price: string; features: string[] }> = {
 export async function loader({ request }: LoaderFunctionArgs) {
   const { billing } = await authenticate.admin(request);
 
-  const billingCheck = await billing.check({
-    plans: [...PLAN_NAMES],
-    isTest: true,
-  });
+  let activePlan: PlanName | undefined = undefined;
 
-  const activePlan = billingCheck.appSubscriptions[0]?.name as
-    | PlanName
-    | undefined;
+  try {
+    const billingCheck = await billing.check({
+      plans: [...PLAN_NAMES],
+      isTest: true,
+    });
+    activePlan = billingCheck.appSubscriptions[0]?.name as PlanName | undefined;
+  } catch (error) {
+    // Safely handle missing plan or billing redirect errors
+    activePlan = undefined;
+  }
 
   return { activePlan };
 }
