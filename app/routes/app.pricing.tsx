@@ -38,7 +38,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   const billingCheck = await billing.check({
     plans: [...PLAN_NAMES],
-    isTest: process.env.NODE_ENV !== "production",
+    isTest: true,
   });
 
   const activePlan = billingCheck.appSubscriptions[0]?.name as
@@ -62,7 +62,7 @@ export async function action({ request }: ActionFunctionArgs) {
   return billing.request({
     plan,
     isTest: true,
-    returnUrl: `${process.env.SHOPIFY_APP_URL}/app`,
+    returnUrl: "/app",
   });
 }
 
