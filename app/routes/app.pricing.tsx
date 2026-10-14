@@ -61,7 +61,7 @@ export async function action({ request }: ActionFunctionArgs) {
 
   return billing.request({
     plan,
-    isTest: process.env.NODE_ENV !== "production",
+    isTest: true,
     returnUrl: `${process.env.SHOPIFY_APP_URL}/app`,
   });
 }

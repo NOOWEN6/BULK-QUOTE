@@ -2,7 +2,7 @@
 
 client_id = "258db1e1b2e23745ddcce9d05ecf2a63"
 name = "BulkQuote"
-application_url = "https://bulk-quote.onrender.com"
+application_url = "https://bulk-quote-j7t3.onrender.com"
 embedded = true
 
 [access_scopes]
@@ -49,15 +49,15 @@ api_version = "2026-10"
   topics = [ "app/scopes_update" ]
 
 [webhooks.privacy_compliance]
-customer_deletion_url = "https://bulk-quote.onrender.com/webhooks/customers/redact"
-customer_data_request_url = "https://bulk-quote.onrender.com/webhooks/customers/data_request"
-shop_deletion_url = "https://bulk-quote.onrender.com/webhooks/shop/redact"
+customer_deletion_url = "https://bulk-quote-j7t3.onrender.com/webhooks/customers/redact"
+customer_data_request_url = "https://bulk-quote-j7t3.onrender.com/webhooks/customers/data_request"
+shop_deletion_url = "https://bulk-quote-j7t3.onrender.com/webhooks/shop/redact"
 
 [auth]
 redirect_urls = [
-  "https://bulk-quote.onrender.com/auth/callback",
-  "https://bulk-quote.onrender.com/auth/shopify/callback",
-  "https://bulk-quote.onrender.com/api/auth/callback"
+  "https://bulk-quote-j7t3.onrender.com/auth/callback",
+  "https://bulk-quote-j7t3.onrender.com/auth/shopify/callback",
+  "https://bulk-quote-j7t3.onrender.com/api/auth/callback"
 ]
 
 [build]
