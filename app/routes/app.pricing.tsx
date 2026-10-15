@@ -1,5 +1,5 @@
 import type { LoaderFunctionArgs, ActionFunctionArgs } from "react-router";
-import { Form, useLoaderData, useNavigation } from "react-router";
+import { Form, useLoaderData, useNavigation, useRouteError, isRouteErrorResponse } from "react-router";
 import { authenticate } from "../shopify.server";
 import { PLAN_NAMES, type PlanName } from "../billing-plans";
 import { boundary } from "@shopify/shopify-app-react-router/server";
@@ -45,7 +45,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
     });
     activePlan = billingCheck.appSubscriptions[0]?.name as PlanName | undefined;
   } catch (error) {
-    // Safely handle missing plan or billing redirect errors
+    // CRITICAL: Re-throw if error is a Shopify/Remix Response redirect
+    if (error instanceof Response || (typeof error === "object" && error !== null && "status" in error)) {
+      throw error;
+    }
+    console.error("[Billing Check Exception]:", error);
     activePlan = undefined;
   }
 
@@ -114,6 +118,30 @@ export default function Pricing() {
           <PlanCard key={name} name={name} isActive={activePlan === name} />
         ))}
       </s-stack>
+    </s-page>
+  );
+}
+
+// ---------- Error Boundary ----------
+
+export function ErrorBoundary() {
+  const error = useRouteError();
+  console.error("[Pricing ErrorBoundary Caught]:", error);
+
+  let errorMessage = "An unknown error occurred.";
+  if (isRouteErrorResponse(error)) {
+    errorMessage = `${error.status} ${error.statusText}: ${JSON.stringify(error.data)}`;
+  } else if (error instanceof Error) {
+    errorMessage = error.message;
+  }
+
+  return (
+    <s-page heading="Pricing Page Error">
+      <s-section heading="Details">
+        <s-paragraph>
+          <s-text type="strong">Error Details:</s-text> {errorMessage}
+        </s-paragraph>
+      </s-section>
     </s-page>
   );
 }
