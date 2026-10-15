@@ -1,11 +1,8 @@
 import type { LoaderFunctionArgs, ActionFunctionArgs } from "react-router";
 import { Form, useLoaderData, useNavigation, useRouteError } from "react-router";
 import { authenticate } from "../shopify.server";
+import { PLAN_NAMES, type PlanName } from "../billing-plans";
 import { boundary } from "@shopify/shopify-app-react-router/server";
-
-export type PlanName = "Starter" | "Growth" | "Pro";
-
-const PLAN_NAMES: PlanName[] = ["Starter", "Growth", "Pro"];
 
 const PLAN_DETAILS: Record<PlanName, { price: string; features: string[] }> = {
   Starter: {
