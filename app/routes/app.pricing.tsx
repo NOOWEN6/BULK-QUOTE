@@ -34,26 +34,9 @@ const PLAN_DETAILS: Record<PlanName, { price: string; features: string[] }> = {
 // ---------- Loader ----------
 
 export async function loader({ request }: LoaderFunctionArgs) {
-  const { billing } = await authenticate.admin(request);
-
-  let activePlan: PlanName | undefined = undefined;
-
-  try {
-    const billingCheck = await billing.check({
-      plans: [...PLAN_NAMES],
-      isTest: true,
-    });
-    activePlan = billingCheck.appSubscriptions[0]?.name as PlanName | undefined;
-  } catch (error) {
-    // CRITICAL: Re-throw if error is a Shopify/Remix Response redirect
-    if (error instanceof Response || (typeof error === "object" && error !== null && "status" in error)) {
-      throw error;
-    }
-    console.error("[Billing Check Exception]:", error);
-    activePlan = undefined;
-  }
-
-  return { activePlan };
+  // Simple auth check without strict billing verification to prevent loader crashes
+  await authenticate.admin(request);
+  return { activePlan: undefined };
 }
 
 // ---------- Action ----------
