@@ -1,8 +1,11 @@
 import type { LoaderFunctionArgs, ActionFunctionArgs } from "react-router";
-import { Form, useLoaderData, useNavigation, useRouteError, isRouteErrorResponse } from "react-router";
+import { Form, useLoaderData, useNavigation, useRouteError } from "react-router";
 import { authenticate } from "../shopify.server";
-import { PLAN_NAMES, type PlanName } from "../billing-plans";
 import { boundary } from "@shopify/shopify-app-react-router/server";
+
+export type PlanName = "Starter" | "Growth" | "Pro";
+
+const PLAN_NAMES: PlanName[] = ["Starter", "Growth", "Pro"];
 
 const PLAN_DETAILS: Record<PlanName, { price: string; features: string[] }> = {
   Starter: {
@@ -111,18 +114,11 @@ export function ErrorBoundary() {
   const error = useRouteError();
   console.error("[Pricing ErrorBoundary Caught]:", error);
 
-  let errorMessage = "An unknown error occurred.";
-  if (isRouteErrorResponse(error)) {
-    errorMessage = `${error.status} ${error.statusText}: ${JSON.stringify(error.data)}`;
-  } else if (error instanceof Error) {
-    errorMessage = error.message;
-  }
-
   return (
     <s-page heading="Pricing Page Error">
       <s-section heading="Details">
         <s-paragraph>
-          <s-text type="strong">Error Details:</s-text> {errorMessage}
+          <s-text type="strong">Error Details:</s-text> {error instanceof Error ? error.message : "Unexpected Server Error"}
         </s-paragraph>
       </s-section>
     </s-page>
