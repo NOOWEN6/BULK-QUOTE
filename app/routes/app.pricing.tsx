@@ -37,7 +37,6 @@ const PLAN_DETAILS: Record<PlanName, { price: string; features: string[] }> = {
 // ---------- Loader ----------
 
 export async function loader({ request }: LoaderFunctionArgs) {
-  // Simple auth check without strict billing verification to prevent loader crashes
   await authenticate.admin(request);
   return { activePlan: undefined };
 }
@@ -70,27 +69,25 @@ function PlanCard({ name, isActive }: { name: PlanName; isActive: boolean }) {
   const { price, features } = PLAN_DETAILS[name];
 
   return (
-    <s-section heading={name}>
+    <div style={{ border: "1px solid #ccc", padding: "16px", borderRadius: "8px", flex: "1", minWidth: "220px" }}>
+      <h3>{name}</h3>
       <Form method="post">
         <input type="hidden" name="plan" value={name} />
-        <s-stack direction="block" gap="base">
-          {isActive && <s-badge tone="success">Current plan</s-badge>}
-          <s-heading>{price}</s-heading>
-          <s-unordered-list>
-            {features.map((f) => (
-              <s-list-item key={f}>{f}</s-list-item>
-            ))}
-          </s-unordered-list>
-          <s-button
-            type="submit"
-            variant={isActive ? "secondary" : "primary"}
-            disabled={isActive || busy}
-          >
-            {isActive ? "Current plan" : busy ? "Redirecting…" : `Choose ${name}`}
-          </s-button>
-        </s-stack>
+        <h4>{price}</h4>
+        <ul>
+          {features.map((f) => (
+            <li key={f}>{f}</li>
+          ))}
+        </ul>
+        <button
+          type="submit"
+          disabled={isActive || busy}
+          style={{ padding: "8px 16px", cursor: "pointer" }}
+        >
+          {isActive ? "Current plan" : busy ? "Redirecting…" : `Choose ${name}`}
+        </button>
       </Form>
-    </s-section>
+    </div>
   );
 }
 
@@ -98,13 +95,14 @@ export default function Pricing() {
   const { activePlan } = useLoaderData<typeof loader>();
 
   return (
-    <s-page heading="Plans & pricing">
-      <s-stack direction="inline" gap="base">
+    <div style={{ padding: "20px" }}>
+      <h1>Plans & pricing</h1>
+      <div style={{ display: "flex", gap: "16px", flexWrap: "wrap", marginTop: "20px" }}>
         {PLAN_NAMES.map((name) => (
           <PlanCard key={name} name={name} isActive={activePlan === name} />
         ))}
-      </s-stack>
-    </s-page>
+      </div>
+    </div>
   );
 }
 
@@ -115,13 +113,10 @@ export function ErrorBoundary() {
   console.error("[Pricing ErrorBoundary Caught]:", error);
 
   return (
-    <s-page heading="Pricing Page Error">
-      <s-section heading="Details">
-        <s-paragraph>
-          <s-text type="strong">Error Details:</s-text> {error instanceof Error ? error.message : "Unexpected Server Error"}
-        </s-paragraph>
-      </s-section>
-    </s-page>
+    <div style={{ padding: "20px", color: "red" }}>
+      <h1>Pricing Page Error</h1>
+      <p>{error instanceof Error ? error.message : "Unexpected Server Error"}</p>
+    </div>
   );
 }
 
