@@ -63,11 +63,10 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   const shopClean = session.shop.replace(".myshopify.com", "");
-  const apiKey = process.env.SHOPIFY_API_KEY || "";
+  const apiKey = process.env.SHOPIFY_API_KEY || "258db1e1b2e23745ddcce9d05ecf2a63";
 
-  const returnUrl = apiKey
-    ? `https://admin.shopify.com/store/${shopClean}/apps/${apiKey}/app`
-    : `${process.env.SHOPIFY_APP_URL || ""}/app`;
+  // Use full admin embedded URL to prevent 503 proxy crash
+  const returnUrl = `https://admin.shopify.com/store/${shopClean}/apps/${apiKey}/app`;
 
   return billing.request({
     plan,
