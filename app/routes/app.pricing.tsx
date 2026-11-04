@@ -1,5 +1,6 @@
-import type { LoaderFunctionArgs, ActionFunctionArgs } from "react-router";
+import type { HeadersFunction, LoaderFunctionArgs, ActionFunctionArgs } from "react-router";
 import { Form, useLoaderData, useNavigation, useRouteError } from "react-router";
+import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import { PLAN_NAMES, type PlanName } from "../billing-plans";
 
@@ -65,7 +66,7 @@ export async function action({ request }: ActionFunctionArgs) {
   const shopClean = session.shop.replace(".myshopify.com", "");
   const apiKey = process.env.SHOPIFY_API_KEY || "258db1e1b2e23745ddcce9d05ecf2a63";
 
-  // Use full admin embedded URL to prevent 503 proxy crash
+  // Deep-link embedded return URL so App Bridge handles the landing smoothly
   const returnUrl = `https://admin.shopify.com/store/${shopClean}/apps/${apiKey}/app`;
 
   return billing.request({
@@ -145,16 +146,12 @@ export default function Pricing() {
   );
 }
 
-// ---------- Error Boundary ----------
+// ---------- Boundary & Headers ----------
 
 export function ErrorBoundary() {
-  const error = useRouteError();
-  console.error("[Pricing ErrorBoundary Caught]:", error);
-
-  return (
-    <div style={{ padding: "20px", color: "red" }}>
-      <h1>Pricing Page Error</h1>
-      <p>{error instanceof Error ? error.message : "Unexpected Server Error"}</p>
-    </div>
-  );
+  return boundary.error(useRouteError());
 }
+
+export const headers: HeadersFunction = (headersArgs) => {
+  return boundary.headers(headersArgs);
+};
