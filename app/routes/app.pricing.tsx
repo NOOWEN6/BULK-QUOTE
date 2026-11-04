@@ -34,14 +34,28 @@ const PLAN_DETAILS: Record<PlanName, { price: string; features: string[] }> = {
 // ---------- Loader ----------
 
 export async function loader({ request }: LoaderFunctionArgs) {
-  await authenticate.admin(request);
-  return { activePlan: undefined };
+  const { billing } = await authenticate.admin(request);
+
+  let activePlan: PlanName | undefined;
+  try {
+    const check = await billing.check({
+      plans: [...PLAN_NAMES],
+      isTest: true,
+    });
+    if (check.hasActivePayment) {
+      activePlan = check.appSubscriptions[0]?.name as PlanName;
+    }
+  } catch (error) {
+    console.error("[pricing loader billing check error]", error);
+  }
+
+  return { activePlan };
 }
 
 // ---------- Action ----------
 
 export async function action({ request }: ActionFunctionArgs) {
-  const { billing } = await authenticate.admin(request);
+  const { billing, session } = await authenticate.admin(request);
   const formData = await request.formData();
   const plan = formData.get("plan") as PlanName;
 
@@ -49,10 +63,18 @@ export async function action({ request }: ActionFunctionArgs) {
     return { error: "Unknown plan" };
   }
 
+  const shopClean = session.shop.replace(".myshopify.com", "");
+  const apiKey = process.env.SHOPIFY_API_KEY || "";
+  
+  // Fully qualified Shopify Admin deep link prevents the 503 proxy crash
+  const returnUrl = apiKey
+    ? `https://admin.shopify.com/store/${shopClean}/apps/${apiKey}/app`
+    : `${process.env.SHOPIFY_APP_URL || ""}/app`;
+
   return billing.request({
     plan,
     isTest: true,
-    returnUrl: "/app",
+    returnUrl,
   });
 }
 
@@ -66,7 +88,16 @@ function PlanCard({ name, isActive }: { name: PlanName; isActive: boolean }) {
   const { price, features } = PLAN_DETAILS[name];
 
   return (
-    <div style={{ border: "1px solid #ccc", padding: "16px", borderRadius: "8px", flex: "1", minWidth: "220px" }}>
+    <div
+      style={{
+        border: isActive ? "2px solid #008060" : "1px solid #ccc",
+        padding: "16px",
+        borderRadius: "8px",
+        flex: "1",
+        minWidth: "220px",
+        background: isActive ? "#f6fdf9" : "#fff",
+      }}
+    >
       <h3>{name}</h3>
       <Form method="post">
         <input type="hidden" name="plan" value={name} />
@@ -79,7 +110,14 @@ function PlanCard({ name, isActive }: { name: PlanName; isActive: boolean }) {
         <button
           type="submit"
           disabled={isActive || busy}
-          style={{ padding: "8px 16px", cursor: "pointer" }}
+          style={{
+            padding: "8px 16px",
+            cursor: isActive || busy ? "not-allowed" : "pointer",
+            background: isActive ? "#ccc" : "#008060",
+            color: "#fff",
+            border: "none",
+            borderRadius: "4px",
+          }}
         >
           {isActive ? "Current plan" : busy ? "Redirecting…" : `Choose ${name}`}
         </button>
@@ -94,7 +132,14 @@ export default function Pricing() {
   return (
     <div style={{ padding: "20px" }}>
       <h1>Plans & pricing</h1>
-      <div style={{ display: "flex", gap: "16px", flexWrap: "wrap", marginTop: "20px" }}>
+      <div
+        style={{
+          display: "flex",
+          gap: "16px",
+          flexWrap: "wrap",
+          marginTop: "20px",
+        }}
+      >
         {PLAN_NAMES.map((name) => (
           <PlanCard key={name} name={name} isActive={activePlan === name} />
         ))}

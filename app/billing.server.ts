@@ -2,8 +2,14 @@ import { redirect } from "react-router";
 import { authenticate } from "./shopify.server";
 import { PLAN_NAMES, type PlanName } from "./billing-plans";
 
-function isRedirect(error: unknown): error is Response {
-  return error instanceof Response;
+function isResponse(error: unknown): error is Response {
+  return (
+    error instanceof Response ||
+    (typeof error === "object" &&
+      error !== null &&
+      "status" in error &&
+      "headers" in error)
+  );
 }
 
 function isFetchDead(error: unknown) {
@@ -22,7 +28,7 @@ async function withRetries<T>(fn: () => Promise<T>, attempts = 3): Promise<T> {
       return await fn();
     } catch (error) {
       last = error;
-      if (isRedirect(error) || !isFetchDead(error) || i === attempts - 1) {
+      if (isResponse(error) || !isFetchDead(error) || i === attempts - 1) {
         throw error;
       }
       await new Promise((r) => setTimeout(r, 400 * (i + 1)));
@@ -49,7 +55,7 @@ export async function requireActiveSubscription(request: Request) {
 
     return { session, admin, activePlan };
   } catch (error) {
-    if (isRedirect(error)) throw error;
+    if (isResponse(error)) throw error;
 
     const cause =
       error instanceof Error && "cause" in error ? error.cause : undefined;
@@ -62,7 +68,6 @@ export async function requireActiveSubscription(request: Request) {
           : undefined,
     });
 
-    // Don't white-screen the app if Shopify's API is unreachable.
     return { session, admin, activePlan: undefined };
   }
 }
