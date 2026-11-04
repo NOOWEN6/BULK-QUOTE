@@ -2,7 +2,6 @@ import type { LoaderFunctionArgs, ActionFunctionArgs } from "react-router";
 import { Form, useLoaderData, useNavigation, useRouteError } from "react-router";
 import { authenticate } from "../shopify.server";
 import { PLAN_NAMES, type PlanName } from "../billing-plans";
-import { boundary } from "@shopify/shopify-app-react-router/server";
 
 const PLAN_DETAILS: Record<PlanName, { price: string; features: string[] }> = {
   Starter: {
@@ -65,8 +64,7 @@ export async function action({ request }: ActionFunctionArgs) {
 
   const shopClean = session.shop.replace(".myshopify.com", "");
   const apiKey = process.env.SHOPIFY_API_KEY || "";
-  
-  // Fully qualified Shopify Admin deep link prevents the 503 proxy crash
+
   const returnUrl = apiKey
     ? `https://admin.shopify.com/store/${shopClean}/apps/${apiKey}/app`
     : `${process.env.SHOPIFY_APP_URL || ""}/app`;
@@ -161,7 +159,3 @@ export function ErrorBoundary() {
     </div>
   );
 }
-
-export const headers = (headersArgs: Parameters<typeof boundary.headers>[0]) => {
-  return boundary.headers(headersArgs);
-};
