@@ -3,17 +3,19 @@ import { authenticate } from "../shopify.server";
 import db from "../db.server";
 
 export async function action({ request }: ActionFunctionArgs) {
-  // Verifies the request signature came from Shopify's proxy, and gives us `session`/`liquid` helpers
-  const { session, liquid } = await authenticate.public.appProxy(request);
+  // Verifies the request really came from Shopify's app proxy (throws if not)
+  const { session } = await authenticate.public.appProxy(request);
 
-  if (!session) {
+  // Fall back to the signed `shop` param so a missing session never drops a quote
+  const shop =
+    session?.shop ?? new URL(request.url).searchParams.get("shop");
+
+  if (!shop) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
       status: 401,
       headers: { "Content-Type": "application/json" },
     });
   }
-
-  const shop = session.shop;
 
   // Parse incoming form data from the widget
   const formData = await request.formData();
@@ -32,7 +34,7 @@ export async function action({ request }: ActionFunctionArgs) {
     );
   }
 
-  // Check quantity against this shop's discount tiers (MOQ validation)
+  // Check quantity against this shop's discount tiers
   const matchingTier = await db.discountRule.findFirst({
     where: {
       shop,
@@ -42,8 +44,7 @@ export async function action({ request }: ActionFunctionArgs) {
     orderBy: { minQty: "desc" },
   });
 
-  // Save the quote request either way — even if no tier matches,
-  // the merchant may still want to see and respond to the request
+  // Save the quote request either way, even if no tier matches
   const quoteRequest = await db.quoteRequest.create({
     data: {
       shop,
